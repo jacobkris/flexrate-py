@@ -1,0 +1,26 @@
+
+1. Define filter characteristics:
+    - Cut-off frequency (Fc)
+    - Filter order (N)
+    - Window function (e.g., Hamming, Hanning)
+
+2. Determine interpolation factor (L)
+
+3. Calculate FIR filter coefficients (h):
+    - Use window method or other design technique to calculate coefficients
+
+4. Function FIR_Low_Pass_Interpolation(input_signal):
+    - Upsample input_signal by factor L:
+        upsampled_signal = [for each sample in input_signal: append sample + L-1 zeros]
+
+    - Initialize output_signal to an empty array
+
+    - For each position in upsampled_signal:
+        - Apply FIR filter:
+            - filtered_sample = 0
+            - For each coefficient in h:
+                - If valid index in upsampled_signal:
+                    - filtered_sample += coefficient * upsampled_signal[current_index + offset]
+            - Append filtered_sample to output_signal
+
+    - Return output_signal
