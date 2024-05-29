@@ -3,6 +3,7 @@ from scipy.interpolate import lagrange
 from scipy import signal
 import matplotlib.pyplot as plt
 import sample_conversion as sc
+import real_time_lagrange as rtla
 
 plt.rcParams['axes.grid'] = True # set all grids to true
 
