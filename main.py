@@ -3,13 +3,12 @@ from scipy.interpolate import lagrange
 from scipy import signal
 import matplotlib.pyplot as plt
 import sample_conversion as sc
-import real_time_lagrange as rtla
 
 plt.rcParams['axes.grid'] = True # set all grids to true
 
 wave_duration = 1
-sample_rate = 100
-f = 2
+sample_rate = 100 # fs
+f = 4
 decimate_factor = 4
 
 samples = wave_duration * sample_rate
@@ -31,19 +30,17 @@ y_padded = sc.zero_padding(y_down,interpolation_factor)
 x_padded = np.linspace(0,wave_duration,decimate_samples * interpolation_factor)
 
 # y_interpolated = sc.linear_interpolation(y_padded,interpolation_factor)
-y_fir_interpolated = sc.fir_lp_filter(y_padded,cutoff_freq=10)
+y_fir_interpolated = sc.fir_lp_filter(y_padded,cutoff_freq=0.5 * (1/2 * sample_rate))
 y_lagrange_interpolated = sc.lagrange_interpolation(y_padded,6)
 plt.rcParams['axes.grid'] = True
 
 y_optimal_interpolated = sc.optimal_finite_length_filt(y_padded,6)
 
-sc.lagrange_interpolation_new(y_down,0,4)
-
-
 # print("y padded: ",y_padded)
 # print("x padded: ",x_padded)
 # print("Num of samples ypadded",len(y_padded))
 # print("Num of samples xpadded",len(x_padded))
+
 
 fig, axs = plt.subplots(2,3)
 fig.suptitle("Upsampling methods")

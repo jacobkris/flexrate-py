@@ -53,14 +53,6 @@ def lagrange_interpolation(x,order):
     
     return x_interp
 
-def lagrange_interpolation_new(x,order,interpolation_factor):
-    N = len(x)
-    x_interpolate = np.zeros(N * interpolation_factor)
-
-    for n in range(len(x_interpolate)):
-        break
-
-
 def optimal_finite_length_filt(x,order):
     # 1. calculate filter coeffcients using optimal interpolator
     optimal_coeff = x
@@ -68,4 +60,5 @@ def optimal_finite_length_filt(x,order):
     y = signal.lfilter(optimal_coeff, 1, x)
 
     return y
+
 
