@@ -52,13 +52,3 @@ def lagrange_interpolation(x,order):
             x_interp[n] = x[n]  # copy if cannot interpolate
     
     return x_interp
-
-def optimal_finite_length_filt(x,order):
-    # 1. calculate filter coeffcients using optimal interpolator
-    optimal_coeff = x
-    # 2. apply the coefficients to a FIR filter
-    y = signal.lfilter(optimal_coeff, 1, x)
-
-    return y
-
-
