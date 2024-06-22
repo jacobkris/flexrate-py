@@ -1,24 +1,12 @@
-# FASRC (Flexible arbitrary sampling rate converter) based on Tor Ramstad paper
-
 import numpy as np
-import scipy.signal as signal
 import matplotlib.pyplot as plt
+import scipy.signal as signal
 
-def plot_single(signal, fs, title="Signal"):
+def mse(signal1, signal2):
     """
-    Plot one signal
+    Mean squared error calculation between two signals.
     """
-    t_input = np.arange(0, len(signal)) / fs
-    plt.plot(t_input, signal, 'b-')
-    plt.stem(t_input, signal, linefmt='b-', markerfmt='r.', basefmt='r-')
-    plt.title(title)
-    plt.show()
-
-def plot_double(signal1, signal2, fs1, fs2, title1="Signal 1", title2="Signal 2"):
-    """
-    Plot two signals
-    """
-    pass
+    return np.square(np.subtract(signal1, signal2)).mean()
 
 def plot_freq_response(coeffs, fs_in):
     """
@@ -33,68 +21,138 @@ def plot_freq_response(coeffs, fs_in):
     plt.grid(which='both', axis='both')
     plt.show()
 
+def plot_single(s, fs, title="Signal"):
+    """
+    Plot one signal
+    """
+    t = np.arange(0, len(s)) / fs
+    plt.plot(t, s, 'b-')
+    plt.stem(t, s, linefmt='b-', markerfmt='bo', basefmt='r-')
+    plt.title(title)
+    plt.show()
+
+def plot_double(s1, s2, fs1, fs2, label1 = "Signal 1" , label2 = "Signal 2"):
+    """
+    Plot two signals with different or same sampling rates
+    """
+    t1 = np.arange(0, len(s1)) / fs1
+    t2 = np.arange(0, len(s2)) / fs2
+    plt.figure(figsize=(14, 7))
+    plt.stem(t1, s1, linefmt='b-', markerfmt='bo', basefmt='r-', label=label1)
+    plt.stem(t2, s2, linefmt='g-', markerfmt='go', basefmt='r-', label=label2)
+    plt.title(label1 + " and " + label2)
+    plt.xlabel('Time [s]')
+    plt.ylabel('Amplitude')
+    plt.legend()
+    plt.show()
+
 def fir_precalculate_coeffs(fs_in,fs_out,cutoff,num_taps):
     """
     FIR filter coefficients
+    fs_in: input sampling rate
+    fs_out: output sampling rate
+    cutoff: cutoff frequency
+    num_taps: number of taps
     """
     ratio = fs_out / fs_in
     normalized_cutoff = cutoff / fs_in
     coeffs = signal.firwin(num_taps, normalized_cutoff / ratio, window='hamming')
     return coeffs
 
-def fasrc(input_signal, fs_in, fs_out, coeffs):
+
+def lagrange_coeff(t, T, N):
     """
-    Flexible ASRC
+    Lagrange basis polynomial coefficient calculation based on paper formula.  
+    t: time instant
+    T: sampling interval
+    N: interpolation order
     """
-    coeff_order = len(coeffs)
-    input_period = 1 / fs_in 
-    output_period = 1 / fs_out
+    coeff = np.ones(N)
+    for i in range(N):
+        for l in range(N):
+            if i != l:
+                coeff[i] *= (t - l * T) / (i * T - l * T)
+    return coeff
+
+
+def fasrc(input_signal, fs_in, fs_out, N, num_taps=None):
+    """
+    fasrc is an flexible arbitrary ratio resampler that uses either Lagrange interpolation or fir filter for coefficient multiplying.
+    input_signal: input signal in int32
+    fs_in: input sampling rate
+    fs_out: output sampling rate
+    N: order of lagrange interpolation
+    num_taps: number of taps for fir filter (set to None for lagrange interpolation)
+    """
+
+    input_period = 1 / fs 
+    output_period = 1 / fs_new 
     output_length = int(np.ceil(len(input_signal) * fs_out / fs_in))
     output_signal = np.zeros(output_length)
 
     for sample_idx in range(output_length):
-        t_k = sample_idx * output_period
-        n = int(t_k / input_period)
-        delta_t = t_k - n * input_period
-        offset = int(np.round(delta_t / input_period))
-        for m in range(coeff_order):
-            if 0 <= n - offset + m  < len(input_signal):
-                output_signal[sample_idx] += coeffs[m] * input_signal[n - offset + m]
+        t_k = sample_idx * output_period # current time instant
+        n = int(t_k / input_period) # sample index for current time instant
+        delta_t = t_k - n * input_period # sampling interval
+        offset = 0
 
-    return output_signal
+        if num_taps is not None:
+            coeff = fir_precalculate_coeffs(fs_in, fs_out, 20000, num_taps)
+            N = num_taps
+            offset = num_taps // 2 # TODO
+        else:
+            coeff = lagrange_coeff(delta_t, input_period, N) # calculate lagrange coeffs
 
-if __name__ == '__main__':
-    # test signal
-    f = 440 # Hz
-    fs_in = 41100 # Hz
-    fs_out = 48000 # Hz
-    periods = 4
-    duration = periods / f
-    print("Frequency of signal: ", f, "Hz")
-    print("Input sampling rate: ", fs_in)
-    print("Output sampling rate: ", fs_out)
-    n = int(fs_in * duration)
+        # pad input signal if necessary
+        if n + N > len(input_signal):
+            pad_length = n + N - len(input_signal)
+            input_signal = np.pad(input_signal, (0, pad_length), mode='edge')
+       
+        output_sample = 0
+        for i in range(N):
+            output_sample += coeff[i] * input_signal[n + i - offset]
+
+        output_signal[sample_idx] = output_sample # append sample to output signal
+    
+    return np.array(output_signal)
+
+if __name__ == "__main__":
+    # plot signal
+    f = 440 # 440 Hz
+    fs = 41100
+    fs_new = 48000
+    periods = 8
+    duration = periods * 1/f 
+    print("Input sampling rate: ", fs)
+    print("Output sampling rate: ", fs_new)
+    n = int(duration * fs) # number of samples
     t = np.linspace(0, duration, n, endpoint=False)
-    input_signal = 10000 * np.sin(2 * np.pi * f * t)
-    n_up = int(fs_out * duration)
-    t_up = np.linspace(0, duration, n_up, endpoint=False)
-    upsampled_signal = 10000 * np.sin(2 * np.pi * f * t_up)
+    n_new = int(duration * fs_new)
+    t_new = np.linspace(0, duration, n_new, endpoint=False)
+
+    input_signal = 10000 * np.sin(2 * np.pi * f * t) 
     input_signal = input_signal.astype(np.int32)
-    print("Number of samples in input signal: ", n)
-    print("First 10 samples of input signal: ", input_signal[:10])
-    plot_single(input_signal, fs_in, title="Input Signal")
+    
+    real_output_signal = 10000 * np.sin(2 * np.pi * f * t_new)
 
-    # filter design
-    num_taps = 16
-    cutoff = 20000
-    coeffs = fir_precalculate_coeffs(fs_in, fs_out, cutoff, num_taps)
-    plot_freq_response(coeffs, fs_in)
+    output_signal_lagrange = fasrc(input_signal, fs, fs_new, 3)
+    output_signal_fir = fasrc(input_signal, fs, fs_new, 3, num_taps=16)
 
-    output_signal = fasrc(input_signal, fs_in, fs_out, coeffs)
-    output_signal = output_signal.astype(np.int32)
-    print("Number of samples in output signal: ", len(output_signal))
-    print("First 10 samples of output signal: ", output_signal[:10])
-    plot_single(output_signal, fs_out, title="Output Signal")
-    print("Number of samples in upsampled signal: ", len(upsampled_signal))
-    print("First 10 samples of upsampled signal: ", upsampled_signal[:10])
-    plot_single(upsampled_signal, fs_out, title="Upsampled Signal for Comparison")
+    output_signal_scipy = signal.resample(input_signal, n_new, domain='time')
+
+
+    plot_double(input_signal, output_signal_lagrange, fs, fs_new, label1="Input Signal", label2="Lagrange Interpolated Output")
+
+    plot_double(input_signal, output_signal_fir, fs, fs_new, label1="Input Signal", label2="FIR Interpolated Output")
+
+    plot_double(output_signal_lagrange, real_output_signal, fs_new, fs_new, label1="Lagrange Interpolated Output", label2="Real Interpolated")
+    
+    plot_double(output_signal_scipy, real_output_signal, fs_new, fs_new, label1="Scipy Interpolated Output", label2="Real Interpolated")
+
+    # Mean squared error
+    mse_scipy = mse(output_signal_scipy, real_output_signal)
+    mse = mse(output_signal_lagrange, real_output_signal)
+    print("Mean squared error between real and my estimated: ", mse)
+    print("Mean squared error between real and scipy: ", mse_scipy)
+
+    # test mse of different interpolation orders
